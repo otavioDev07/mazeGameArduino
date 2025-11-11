@@ -1,50 +1,78 @@
 #include <Servo.h>
 
-Servo servo1;
-Servo servo2;
-int joyX = 0; // Analog pin for X-axis
-int joyY = 1; // Analog pin for Y-axis
+Servo servoMotor1;
+Servo servoMotor2;
 
-int servoVal;
-unsigned long previousMillis = 0; // Timer variable for Serial output
-const long interval = 500;        // Interval for Serial output in milliseconds
+int pinoEixoX = 0; // A0
+int pinoEixoY = 1; // A1
 
-void setup() 
-{
-  Serial.begin(9600); // Initialize serial communication at 9600 bps
-  servo1.attach(3);    // Connect servo1 to digital pin 3
-  servo2.attach(5);    // Connect servo2 to digital pin 5
+// --- AJUSTES DE SENSIBILIDADE ---
+
+const int TOLERANCIA_ZONA_MORTA = 100; 
+const int CENTRO_JOYSTICK = 512;
+
+const int LIMITE_MINIMO = CENTRO_JOYSTICK - TOLERANCIA_ZONA_MORTA; 
+const int LIMITE_MAXIMO = CENTRO_JOYSTICK + TOLERANCIA_ZONA_MORTA; 
+
+// --- FILTRO SUAVIZADOR ---
+const float FATOR_SUAVIZACAO = 0.3; 
+float valorSuaveX = 512.0;
+float valorSuaveY = 512.0;
+
+
+unsigned long tempoAnterior = 0;
+const long intervalo = 500;
+
+void setup() {
+  Serial.begin(9600);
+  servoMotor1.attach(4);
+  servoMotor2.attach(5);
+  
+  // Inicia os servos no centro
+  servoMotor1.write(90);
+  servoMotor2.write(90);
 }
 
-void loop()
-{
-  // Read and map X-axis joystick value for servo1
-  servoVal = analogRead(joyX);
-  int servo1Pos = map(servoVal, 0, 1023, 180, 130);
-  servo1.write(servo1Pos);
+void loop() {
+  
+  // --- EIXO X (Servo 1) ---
+  
+  // 1. Lê o valor bruto do joystick
+  int valorBrutoX = analogRead(pinoEixoX);
+  
+  // 2. Aplica o filtro suavizador
+  valorSuaveX = (FATOR_SUAVIZACAO * valorBrutoX) + ((1.0 - FATOR_SUAVIZACAO) * valorSuaveX);
+  
+  // 3. Usa o valor suavizado (convertido para int) para a lógica
+  int valorEixoX = (int)valorSuaveX;
 
-  // Read and map Y-axis joystick value for servo2
-  servoVal = analogRead(joyY);
-  int servo2Pos = map(servoVal, 0, 1023, 130, 180);
-  servo2.write(servo2Pos);
-
-  // Check if the interval has elapsed for Serial output
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) 
-  {
-    previousMillis = currentMillis; // Update the timer
-
-    // Print joystick and servo positions to Serial Monitor
-    Serial.print("Joystick X: ");
-    Serial.print(analogRead(joyX));
-    Serial.print(" -> Servo1 Position: ");
-    Serial.println(servo1Pos);
-
-    Serial.print("Joystick Y: ");
-    Serial.print(analogRead(joyY));
-    Serial.print(" -> Servo2 Position: ");
-    Serial.println(servo2Pos);
+  // 4. Verifica a zona morta
+  if (valorEixoX < LIMITE_MINIMO || valorEixoX > LIMITE_MAXIMO) {
+    int posicaoServo1 = map(valorEixoX, 0, 1023, 0, 180);
+    servoMotor1.write(posicaoServo1);
+  } else {
+    servoMotor1.write(90); 
   }
 
-  delay(50); // Small delay for stable servo movement
+  
+  // --- EIXO Y (Servo 2) ---
+  
+  int valorBrutoY = analogRead(pinoEixoY);
+
+  valorSuaveY = (FATOR_SUAVIZACAO * valorBrutoY) + ((1.0 - FATOR_SUAVIZACAO) * valorSuaveY);
+  int valorEixoY = (int)valorSuaveY;
+  
+  if (valorEixoY < LIMITE_MINIMO || valorEixoY > LIMITE_MAXIMO) {
+    int posicaoServo2 = map(valorEixoY, 0, 1023, 0, 180);
+    servoMotor2.write(posicaoServo2);
+  } else {
+    servoMotor2.write(90);
+  }
+
+  unsigned long tempoAtual = millis();
+  if (tempoAtual - tempoAnterior >= intervalo) {
+    tempoAnterior = tempoAtual;
+  }
+
+  delay(20);
 }
